@@ -195,7 +195,7 @@
         }
 
         async function sendMessage() {
-            debugger;
+            
             console.log(userId);
             const userMessage = userInput.value.trim();
             if (!userMessage) return;
@@ -214,9 +214,15 @@
                 });
 
                 const data = await response.json();
+                console.log(data);
                 if (data.question) {
                     appendMessage('bot', data.question,true);
                 } else {
+                    // Get the div element by its class name
+var chatInputDiv = document.querySelector(".chat-input");
+
+// Hide the div
+chatInputDiv.style.display = "none";
                     appendMessage('bot', 'Thank you for your responses!',false);
                 }
             } catch (error) {

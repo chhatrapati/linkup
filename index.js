@@ -9,7 +9,7 @@ app.use(bodyParser.json());
 
 // OpenAI Initialization
 const openai = new OpenAI({
-  apiKey: "", // Replace with your OpenAI API key
+  apiKey: process.env.apikey, // Replace with your OpenAI API key
 });
 
 const questions = [

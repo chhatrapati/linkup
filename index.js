@@ -23,7 +23,6 @@ const questionsMap = {
 // To keep track of user sessions
 const userSessions = {};
 
-// Start session
 app.post('/start', (req, res) => {
   const userId = req.body.userId;
   console.log(`Starting session for user: ${userId}`);
@@ -34,7 +33,6 @@ app.post('/start', (req, res) => {
   res.json({ question: questionsMap[firstField] });
 });
 
-// Handle user response
 app.post('/respond', async (req, res) => {
   const { userId, response } = req.body;
   const session = userSessions[userId];
@@ -50,16 +48,17 @@ app.post('/respond', async (req, res) => {
   if (unansweredFields.length === 0) {
     return res.json({
       message: "All questions answered. Thank you for your responses!",
-      data: session.answers
+      data: session.answers,
+      isValidResponse:true
     });
   }
 
-  // Process the user's response for the current field
+  // Current field and question
   const currentField = unansweredFields[0];
   const currentQuestion = questionsMap[currentField];
 
   try {
-    // Validate user response using OpenAI
+    // Step 1: Validate the response
     const validationResponse = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [
@@ -77,17 +76,15 @@ app.post('/respond', async (req, res) => {
     });
 
     const isValidResponse = validationResponse.choices[0].message.content.trim().toLowerCase() === "yes";
-    console.log('isValidResponse', isValidResponse);
 
     if (!isValidResponse) {
-      // If the response is invalid, ask the same question again with a clarification message
-      const dynamicPrompt = `
+      // If the response is invalid, politely ask the same question again
+      const clarificationMessage = `
       The user has provided an irrelevant or incomplete answer to the question: "${currentQuestion}". 
-      Please rephrase or explain why their input is not sufficient and politely ask them to provide a valid and relevant answer for the same question. 
-      Keep the tone friendly and professional and in very short message.
+      Please politely ask them to provide a valid and relevant answer.
       User's response: "${response}"`;
 
-      const generatedMessage = await openai.chat.completions.create({
+      const clarificationResponse = await openai.chat.completions.create({
         model: "gpt-4",
         messages: [
           {
@@ -96,12 +93,12 @@ app.post('/respond', async (req, res) => {
           },
           {
             role: "user",
-            content: dynamicPrompt,
+            content: clarificationMessage,
           },
         ],
       });
 
-      const customMessage = generatedMessage.choices[0].message.content.trim();
+      const customMessage = clarificationResponse.choices[0].message.content.trim();
 
       return res.json({
         message: customMessage,
@@ -110,10 +107,37 @@ app.post('/respond', async (req, res) => {
       });
     }
 
-    // Save the valid response
-    session.answers[currentField] = response;
+    // Step 2: Extract information
+    const systemPrompt = `
+      Extract the following information from the user's response:
+      - Current Role
+      - Collaboration Needs
+      - Domain
+      - Region
+      Return the result as a JSON object with keys: current_role, collaboration_needs, domain, region.
+      If any key is missing, return only the extracted fields.
+    `;
 
-    // Find the next missing field
+    const extractionResponse = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt,
+        },
+        {
+          role: "user",
+          content: `User response: "${response}"`,
+        },
+      ],
+    });
+
+    const extractedData = JSON.parse(extractionResponse.choices[0].message.content);
+
+    // Merge extracted data into session answers
+    session.answers = { ...session.answers, ...extractedData };
+
+    // Find the next unanswered field
     const nextUnansweredFields = Object.keys(questionsMap).filter(field => !session.answers[field]);
 
     if (nextUnansweredFields.length === 0) {
@@ -130,8 +154,8 @@ app.post('/respond', async (req, res) => {
     res.json({ isValidResponse:true,question: questionsMap[nextField] });
 
   } catch (error) {
-    console.error("Error validating response:", error);
-    res.status(500).json({ error: "Something went wrong while validating the response." });
+    console.error("Error processing response:", error);
+    res.status(500).json({ error: "Something went wrong while processing the response." });
   }
 });
 

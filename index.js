@@ -3,8 +3,17 @@ const bodyParser = require('body-parser');
 const { OpenAI } = require('openai');
 const cors = require('cors');
 
+// Configure CORS options
+const corsOptions = {
+  origin: 'https://linkupui.onrender.com', // Allow this specific origin
+  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE', // Allow these HTTP methods
+  allowedHeaders: ['Content-Type', 'Authorization'], // Allow these headers
+  credentials: true, // Allow credentials if needed
+};
+
 const app = express();
-app.use(cors());
+app.use(cors(corsOptions));
+
 app.use(bodyParser.json());
 
 // OpenAI Initialization
